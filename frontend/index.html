@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Three-tier application using MongoDB as persistent database and Redis as cache database for task scheduling and draft registration storage.">
+  <meta name="theme-color" content="#0f172a">
+  <title>Three-Tier App — MongoDB Database & Redis Cache Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+
+  <!-- Header Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-group">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Chronos <span class="badge-tier">Three-Tier Architecture</span></h1>
+          <p class="brand-subtitle">MongoDB (Primary Database) • Redis (In-Memory Cache & Drafts)</p>
+        </div>
+      </div>
+
+      <!-- Multi-tier Health Indicators -->
+      <div class="system-status-pills">
+        <div class="status-pill" id="tierFrontendPill" title="Tier 1 Frontend">
+          <span class="status-dot healthy"></span>
+          <span class="pill-label">Tier 1: UI</span>
+        </div>
+        <div class="status-pill" id="tierBackendPill" title="Tier 2 Node.js Express API">
+          <span class="status-dot connecting"></span>
+          <span class="pill-label">Tier 2: API</span>
+        </div>
+        <div class="status-pill" id="tierMongoPill" title="Tier 3 Primary Database: MongoDB">
+          <span class="status-dot connecting"></span>
+          <span class="pill-label" id="mongoStatusText">MongoDB (DB)</span>
+        </div>
+        <div class="status-pill" id="tierRedisPill" title="Tier 3 Cache Database: Redis">
+          <span class="status-dot connecting"></span>
+          <span class="pill-label" id="redisStatusText">Redis (Cache)</span>
+        </div>
+        <div class="live-stream-badge" id="sseLiveBadge" title="Server-Sent Events active">
+          <span class="pulse-indicator"></span>
+          <span>Live SSE</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnSeedData" class="btn btn-secondary" title="Load sample jobs into MongoDB & Redis">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          Seed Demo Jobs
+        </button>
+        <button id="btnOpenCreateModal" class="btn btn-primary" title="Schedule a new background task">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          + Schedule Task
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Navigation Tabs (Tasks vs Registration) -->
+  <div class="view-switcher-bar">
+    <div class="view-switcher-container">
+      <div class="view-tabs">
+        <button class="view-tab active" id="viewTabTasks" data-view="tasks">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          Task Scheduler Engine
+        </button>
+        <button class="view-tab" id="viewTabRegistration" data-view="registration">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="8.5" cy="7" r="4"/>
+            <line x1="20" y1="8" x2="20" y2="14"/>
+            <line x1="23" y1="11" x2="17" y2="11"/>
+          </svg>
+          User Registration <span class="pill-draft-badge" id="navDraftBadge">Redis Cache Active</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <!-- VIEW 1: Task Scheduler View -->
+    <div id="viewTasksSection" class="view-panel">
+      <!-- Metrics Cards -->
+      <section class="metrics-grid" aria-label="System Metrics">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Total Tasks</span>
+            <div class="metric-icon blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+          </div>
+          <div class="metric-value" id="statTotalTasks">0</div>
+          <div class="metric-footnote">Persisted in MongoDB</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Active / Scheduled</span>
+            <div class="metric-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="metric-value text-green" id="statScheduledTasks">0</div>
+          <div class="metric-footnote">Scheduled in Redis ZSET</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Running Now</span>
+            <div class="metric-icon purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+          </div>
+          <div class="metric-value text-purple" id="statRunningTasks">0</div>
+          <div class="metric-footnote">Active Worker Executions</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Total Users (MongoDB)</span>
+            <div class="metric-icon amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+          </div>
+          <div class="metric-value text-amber" id="statTotalUsers">0</div>
+          <div class="metric-footnote">Stored in MongoDB 'users'</div>
+        </div>
+      </section>
+
+      <!-- Toolbar, Filter Tabs & Search -->
+      <section class="toolbar-section">
+        <div class="filter-tabs" id="filterTabs">
+          <button class="tab-btn active" data-filter="all" id="tabAll">All <span class="tab-count" id="countAll">0</span></button>
+          <button class="tab-btn" data-filter="scheduled" id="tabScheduled">Scheduled <span class="tab-count" id="countScheduled">0</span></button>
+          <button class="tab-btn" data-filter="running" id="tabRunning">Running <span class="tab-count" id="countRunning">0</span></button>
+          <button class="tab-btn" data-filter="completed" id="tabCompleted">Completed <span class="tab-count" id="countCompleted">0</span></button>
+          <button class="tab-btn" data-filter="paused" id="tabPaused">Paused <span class="tab-count" id="countPaused">0</span></button>
+        </div>
+
+        <div class="search-and-actions">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="taskSearchInput" placeholder="Filter tasks by name or payload..." autocomplete="off">
+          </div>
+          <button class="btn btn-icon" id="btnRefreshTasks" title="Force Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tasks Grid -->
+      <section class="tasks-container" aria-label="Task List">
+        <div id="tasksGrid" class="tasks-grid"></div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state hidden">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h3 class="empty-title">No Tasks Found</h3>
+          <p class="empty-subtitle">You have no tasks matching the selected filter. Click below to load demo jobs or create a new task.</p>
+          <div class="empty-actions">
+            <button id="btnEmptySeed" class="btn btn-secondary">Load Demo Tasks</button>
+            <button id="btnEmptyCreate" class="btn btn-primary">+ Create New Task</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 2: User Registration & Redis Draft Cache Demo -->
+    <div id="viewRegistrationSection" class="view-panel hidden">
+      <div class="registration-layout">
+        <!-- Left Column: Registration Form with Auto-Save -->
+        <div class="registration-form-card">
+          <div class="card-header-styled">
+            <div>
+              <div class="cache-badge-live" id="redisAutoSaveBadge">
+                <span class="cache-dot"></span>
+                <span id="cacheBadgeText">Redis Cache Ready</span>
+              </div>
+              <h2 class="section-title">User Registration</h2>
+              <p class="section-subtitle">
+                Any inputs typed here are <strong>auto-saved to Redis in-memory cache</strong> in real-time. If you refresh or leave mid-way, your draft is preserved until final commit to MongoDB!
+              </p>
+            </div>
+          </div>
+
+          <!-- Alert banner when a saved draft is detected -->
+          <div id="draftDetectedAlert" class="draft-alert hidden">
+            <div class="draft-alert-content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="alert-icon">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <div>
+                <strong>Restored from Redis Cache!</strong>
+                <p>We found registration details you left in the middle. (Auto-expires in <span id="draftTtlNotice">30m</span>).</p>
+              </div>
+            </div>
+            <div class="draft-alert-actions">
+              <button type="button" class="btn btn-sm btn-secondary" id="btnDiscardDraft">Discard Draft</button>
+            </div>
+          </div>
+
+          <form id="userRegistrationForm" class="reg-form">
+            <div class="form-row">
+              <div class="form-group half">
+                <label for="regFullName" class="form-label">Full Name <span class="required">*</span></label>
+                <input type="text" id="regFullName" class="form-control" placeholder="e.g. Alex Mercer" required>
+              </div>
+
+              <div class="form-group half">
+                <label for="regEmail" class="form-label">Work Email <span class="required">*</span></label>
+                <input type="email" id="regEmail" class="form-control" placeholder="alex@techcorp.io" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group half">
+                <label for="regRole" class="form-label">Role</label>
+                <select id="regRole" class="form-control">
+                  <option value="Developer">Developer</option>
+                  <option value="DevOps Engineer">DevOps Engineer</option>
+                  <option value="System Administrator">System Administrator</option>
+                  <option value="Product Manager">Product Manager</option>
+                  <option value="QA Specialist">QA Specialist</option>
+                </select>
+              </div>
+
+              <div class="form-group half">
+                <label for="regDept" class="form-label">Department</label>
+                <input type="text" id="regDept" class="form-control" value="Cloud Infrastructure & DevOps">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="regPhone" class="form-label">Phone Number (Optional)</label>
+              <input type="tel" id="regPhone" class="form-control" placeholder="+1 (555) 019-2834">
+            </div>
+
+            <div class="form-group">
+              <label for="regBio" class="form-label">Bio / Profile Summary</label>
+              <textarea id="regBio" class="form-control" rows="3" placeholder="Describe your responsibilities or project role..."></textarea>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="custom-checkbox">
+                <input type="checkbox" id="regNotifications" checked>
+                <span class="checkmark"></span>
+                <span>Enable automated task execution email alerts</span>
+              </label>
+            </div>
+
+            <div class="reg-actions-row">
+              <button type="button" class="btn btn-secondary" id="btnSimulateLeave">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Simulate Mid-way Exit & Reload
+              </button>
+              <button type="submit" class="btn btn-primary" id="btnCompleteRegistration">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save to MongoDB (Evict Redis Draft)
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right Column: Redis Live Cache Inspector & MongoDB Users List -->
+        <div class="registration-sidebar">
+          <!-- Redis Live Cache Inspector Box -->
+          <div class="redis-inspector-card">
+            <div class="inspector-header">
+              <div class="inspector-title-wrap">
+                <div class="redis-logo-icon">R</div>
+                <div>
+                  <h3 class="inspector-title">Redis Cache Inspector</h3>
+                  <span class="inspector-sub">Live In-Memory Draft Store</span>
+                </div>
+              </div>
+              <span class="badge-redis-ttl" id="redisTtlBadge">TTL: Active</span>
+            </div>
+
+            <div class="inspector-body">
+              <div class="inspector-field">
+                <span class="field-label">Redis Key:</span>
+                <code class="code-pill" id="inspectorKeyName">draft:user:session_...</code>
+              </div>
+              <div class="inspector-field">
+                <span class="field-label">Expiration (TTL):</span>
+                <span class="field-value" id="inspectorTtlSec">--</span>
+              </div>
+              <div class="inspector-field">
+                <span class="field-label">Cached JSON Snapshot:</span>
+              </div>
+              <pre class="json-preview" id="inspectorJsonPreview">/* Start typing in the form to see real-time Redis caching */</pre>
+            </div>
+          </div>
+
+          <!-- MongoDB Registered Users Card -->
+          <div class="mongo-users-card">
+            <div class="mongo-card-header">
+              <div class="mongo-title-wrap">
+                <div class="mongo-logo-icon">M</div>
+                <div>
+                  <h3 class="inspector-title">Registered Users</h3>
+                  <span class="inspector-sub">Persisted in MongoDB database</span>
+                </div>
+              </div>
+              <span class="badge-mongo-count" id="mongoUserCount">0 Users</span>
+            </div>
+
+            <div class="mongo-users-list" id="mongoUsersList">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Create Task Modal -->
+  <div id="createTaskModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h2 id="modalTitle" class="modal-title">Schedule New Job</h2>
+            <p class="modal-subtitle">Stored in MongoDB • Scheduled in Redis ZSET</p>
+          </div>
+        </div>
+        <button id="btnCloseModal" class="modal-close-btn" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <form id="createTaskForm" class="modal-form">
+        <div class="form-group">
+          <label for="taskNameInput" class="form-label">Task Name <span class="required">*</span></label>
+          <input type="text" id="taskNameInput" class="form-control" placeholder="e.g. Sync Customer Data, Ping Endpoint..." required>
+        </div>
+
+        <div class="form-group">
+          <label for="taskDescInput" class="form-label">Description</label>
+          <input type="text" id="taskDescInput" class="form-control" placeholder="Brief summary of what this automated job performs">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="taskTypeSelect" class="form-label">Job Type</label>
+            <select id="taskTypeSelect" class="form-control">
+              <option value="http_ping">🌐 HTTP Webhook / Ping</option>
+              <option value="db_backup">💾 Database Snapshot Backup</option>
+              <option value="email_alert">✉️ Email Notification Alert</option>
+              <option value="cache_purge">⚡ Cache & CDN Eviction</option>
+              <option value="report_generator">📊 Report Summary Generator</option>
+              <option value="custom">⚙️ Custom Execution Payload</option>
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label for="scheduleTypeSelect" class="form-label">Schedule Mode</label>
+            <select id="scheduleTypeSelect" class="form-control">
+              <option value="interval">Recurring Interval (Every N sec)</option>
+              <option value="once">One-Time Run (Delay in sec)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row" id="intervalTimingRow">
+          <div class="form-group full">
+            <label for="intervalSecInput" class="form-label" id="timingLabel">Repeat Interval (seconds)</label>
+            <div class="input-with-presets">
+              <input type="number" id="intervalSecInput" class="form-control" min="5" max="86400" value="30" required>
+              <div class="timing-presets">
+                <button type="button" class="preset-btn" data-sec="15">15s</button>
+                <button type="button" class="preset-btn" data-sec="30">30s</button>
+                <button type="button" class="preset-btn" data-sec="60">1m</button>
+                <button type="button" class="preset-btn" data-sec="300">5m</button>
+              </div>
+            </div>
+            <span class="form-help" id="timingHelp">The scheduler worker will automatically execute this task every 30 seconds.</span>
+          </div>
+        </div>
+
+        <div class="payload-box">
+          <div class="payload-box-header">
+            <span class="payload-box-title">Job Specific Parameters</span>
+            <span class="payload-box-type" id="payloadTypeBadge">HTTP Ping</span>
+          </div>
+          <div id="dynamicPayloadFields"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitTask" class="btn btn-primary">
+            <span id="btnSubmitSpinner" class="spinner hidden"></span>
+            Schedule Job
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Slide-out Execution Logs Drawer -->
+  <aside id="logsDrawer" class="logs-drawer hidden" aria-labelledby="drawerTitle">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <h2 id="drawerTitle" class="drawer-title">Execution History</h2>
+        <span class="drawer-subtitle" id="drawerTaskName">Task logs</span>
+      </div>
+      <button id="btnCloseDrawer" class="modal-close-btn" aria-label="Close logs drawer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="drawer-meta-bar">
+        <div><span class="meta-label">Task ID:</span> <code id="drawerTaskId" class="code-pill"></code></div>
+        <div><span class="meta-label">Total Recorded Runs:</span> <span id="drawerRunCount" class="font-bold">0</span></div>
+      </div>
+      <div class="logs-list" id="drawerLogsList"></div>
+    </div>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+services:
+  # ============================================================================
+  # Tier 3: Primary Database (MongoDB 7.0 Persistent Document Database)
+  # ============================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: task_scheduler_mongodb
+    restart: unless-stopped
+    ports:
+      - "27018:27017" # Mapped to 27018 on host to avoid conflict with local Windows MongoDB service
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # Tier 3: Cache Database (Redis 7 In-Memory Cache, Delayed Queue, Draft Store)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: task_scheduler_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # Tier 2: Backend (Node.js Express REST API & Task Scheduler Engine)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: task_scheduler_backend
+    restart: unless-stopped
+    environment:
+      - PORT=5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=mongodb://mongodb:27017/task_scheduler
+      - NODE_ENV=production
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  # ============================================================================
+  # Tier 1: Frontend (Nginx Static Web Server & Reverse Proxy)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: task_scheduler_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
